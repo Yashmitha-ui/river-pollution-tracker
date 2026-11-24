@@ -1,1 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>River Pollution & Water Quality Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+    input[type="range"] {
+      accent-color: #0284c7;
+    }
+  </style>
+</head>
+<body class="antialiased">
 
+  <!-- Top Navigation Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-20">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-sky-600 text-white flex items-center justify-center font-bold shadow-sm">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-lg sm:text-xl font-bold text-slate-900 leading-tight">River Pollution & Water Quality Tracker</h1>
+          <p class="text-xs text-slate-500">IoT Telemetry, Water Quality Index (WQI) & Basin Monitoring</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2.5 flex-wrap">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          ESP32 Live Sync
+        </span>
+        <select id="zoneSelect" onchange="switchZone()" class="text-sm font-medium bg-slate-50 border border-slate-300 text-slate-800 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-500">
+          <option value="upstream">Upstream Zone (Station A)</option>
+          <option value="industrial">Industrial Discharge Zone (Station B)</option>
+          <option value="midstream">City Midstream Basin (Station C)</option>
+          <option value="estuary">Downstream Estuary (Station D)</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- Top 4 KPI Summary Cards -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <!-- KPI 1: WQI -->
+      <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Water Quality Index</span>
+          <span id="kpiWqiBadge" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800">Good</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpiWqiVal" class="text-3xl font-bold text-slate-900">84</span>
+          <span class="text-xs text-slate-500">/ 100 WQI</span>
+        </div>
+        <p id="kpiWqiNote" class="mt-1.5 text-xs text-slate-500">Safe for aquatic ecosystem</p>
+      </div>
+
+      <!-- KPI 2: pH Level -->
+      <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">pH Acidity / Alkalinity</span>
+          <span class="text-xs font-medium text-slate-400">Ideal: 6.5–8.5</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpiPhVal" class="text-3xl font-bold text-slate-900">7.3</span>
+          <span class="text-xs text-slate-500">pH</span>
+        </div>
+        <div class="mt-2 w-full bg-slate-100 rounded-full h-1.5">
+          <div id="kpiPhBar" class="bg-sky-600 h-1.5 rounded-full transition-all duration-300" style="width: 52%"></div>
+        </div>
+      </div>
+
+      <!-- KPI 3: Turbidity -->
+      <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Water Turbidity</span>
+          <span class="text-xs font-medium text-slate-400">Limit: &lt; 25 NTU</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpiTurbVal" class="text-3xl font-bold text-slate-900">12</span>
+          <span class="text-xs text-slate-500">NTU</span>
+        </div>
+        <p id="kpiTurbNote" class="mt-1.5 text-xs text-slate-500">Low suspended sediment load</p>
+      </div>
+
+      <!-- KPI 4: Dissolved Oxygen & Skimmed Waste -->
+      <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Dissolved Oxygen</span>
+          <span class="text-xs font-medium text-sky-600" id="kpiWasteBadge">Skimmed: 14 kg</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpiDoVal" class="text-3xl font-bold text-slate-900">7.8</span>
+          <span class="text-xs text-slate-500">mg/L</span>
+        </div>
+        <p id="kpiDoNote" class="mt-1.5 text-xs text-slate-500">Healthy oxygenation level</p>
+      </div>
+    </section>
+
+    <!-- Main Interactive Workspace: Simulator + Chart -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- Left: Interactive Sensor Simulator & WQI Calculator -->
+      <div class="lg:col-span-5 bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-base font-bold text-slate-900">Sensor & WQI Simulator</h2>
+            <span class="text-xs text-slate-500">Test parameters</span>
+          </div>
+
+          <!-- Quick Presets -->
+          <div class="flex flex-wrap gap-1.5 mb-5">
+            <button onclick="applyPreset(7.4, 8, 8.2, 22)" class="px-2.5 py-1 text-xs font-medium rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition">Clean Upstream</button>
+            <button onclick="applyPreset(6.4, 42, 5.1, 26)" class="px-2.5 py-1 text-xs font-medium rounded-md bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition">Agri Runoff</button>
+            <button onclick="applyPreset(4.8, 115, 2.3, 33)" class="px-2.5 py-1 text-xs font-medium rounded-md bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition">Industrial Spill</button>
+          </div>
+
+          <!-- Sliders -->
+          <div class="space-y-4">
+            <!-- pH Slider -->
+            <div>
+              <div class="flex justify-between text-xs font-medium mb-1">
+                <label for="simPh" class="text-slate-700">pH Level (0 - 14)</label>
+                <span id="simPhDisplay" class="font-bold text-sky-700">7.3</span>
+              </div>
+              <input id="simPh" type="range" min="3" max="11" step="0.1" value="7.3" oninput="recalcSim()" class="w-full cursor-pointer">
+            </div>
+
+            <!-- Turbidity Slider -->
+            <div>
+              <div class="flex justify-between text-xs font-medium mb-1">
+                <label for="simTurb" class="text-slate-700">Turbidity (NTU)</label>
+                <span id="simTurbDisplay" class="font-bold text-sky-700">12 NTU</span>
+              </div>
+              <input id="simTurb" type="range" min="1" max="150" step="1" value="12" oninput="recalcSim()" class="w-full cursor-pointer">
+            </div>
+
+            <!-- Dissolved Oxygen Slider -->
+            <div>
+              <div class="flex justify-between text-xs font-medium mb-1">
+                <label for="simDo" class="text-slate-700">Dissolved Oxygen (mg/L)</label>
+                <span id="simDoDisplay" class="font-bold text-sky-700">7.8 mg/L</span>
+              </div>
+              <input id="simDo" type="range" min="0.5" max="12" step="0.1" value="7.8" oninput="recalcSim()" class="w-full cursor-pointer">
+            </div>
+
+            <!-- Temperature Slider -->
+            <div>
+              <div class="flex justify-between text-xs font-medium mb-1">
+                <label for="simTemp" class="text-slate-700">Water Temperature (°C)</label>
+                <span id="simTempDisplay" class="font-bold text-sky-700">23 °C</span>
+              </div>
+              <input id="simTemp" type="range" min="10" max="42" step="0.5" value="23" oninput="recalcSim()" class="w-full cursor-pointer">
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Calculation Output Box -->
+        <div class="mt-5 pt-4 border-t border-slate-100">
+          <div class="bg-slate-50 rounded-lg p-3 border border-slate-200 flex items-center justify-between mb-3">
+            <div>
+              <span class="text-xs text-slate-500 block">Computed WQI Score</span>
+              <span id="simResultScore" class="text-xl font-bold text-slate-900">84 / 100</span>
+            </div>
+            <div class="text-right">
+              <span id="simResultStatus" class="inline-block px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800">Good Quality</span>
+              <span id="simActionHint" class="block text-[11px] text-slate-500 mt-1">Normal monitoring active</span>
+            </div>
+          </div>
+
+          <button onclick="logCurrentReading()" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm py-2.5 px-4 rounded-lg shadow-sm transition">
+            + Log Reading to Basin Table
+          </button>
+        </div>
+      </div>
+
+      <!-- Right: Telemetry Visualization Chart -->
+      <div class="lg:col-span-7 bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex flex-col">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+          <div>
+            <h2 class="text-base font-bold text-slate-900">Basin Pollution Telemetry</h2>
+            <p class="text-xs text-slate-500">Continuous sensor trend & multi-station comparison</p>
+          </div>
+          <div class="inline-flex rounded-lg bg-slate-100 p-1 self-start">
+            <button id="btnTrendView" onclick="setChartMode('trend')" class="px-3 py-1 text-xs font-semibold rounded-md bg-white text-slate-900 shadow-sm">24h Trend</button>
+            <button id="btnCompareView" onclick="setChartMode('compare')" class="px-3 py-1 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900">Zone Comparison</button>
+          </div>
+        </div>
+
+        <div class="relative flex-1 min-h-[270px] w-full">
+          <canvas id="telemetryChart"></canvas>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Bottom Section: Logged Readings Table & CSV Export -->
+    <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Station Sensor Log & Pollution Alerts</h2>
+          <p class="text-xs text-slate-500">Recorded water quality snapshots across monitoring nodes</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="exportCSV()" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition">
+            Download CSV
+          </button>
+          <button onclick="clearLogs()" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition">
+            Reset Log
+          </button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              <th class="py-3 px-4">Timestamp</th>
+              <th class="py-3 px-4">Monitoring Zone</th>
+              <th class="py-3 px-4">pH</th>
+              <th class="py-3 px-4">Turbidity</th>
+              <th class="py-3 px-4">Dissolved O₂</th>
+              <th class="py-3 px-4">Temp</th>
+              <th class="py-3 px-4">WQI</th>
+              <th class="py-3 px-4">Status</th>
+            </tr>
+          </thead>
+          <tbody id="logTableBody" class="divide-y divide-slate-100 text-sm text-slate-700">
+            <!-- Rows injected via JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // Pre-configured River Zone Data
+    const zonePresets = {
+      upstream:   { name: "Upstream Zone (Station A)", ph: 7.4, turb: 9,  do: 8.1, temp: 21.5, waste: 6 },
+      industrial: { name: "Industrial Discharge (Station B)", ph: 5.4, turb: 88, do: 3.2, temp: 31.0, waste: 42 },
+      midstream:  { name: "City Midstream Basin (Station C)", ph: 6.7, turb: 38, do: 5.4, temp: 25.5, waste: 29 },
+      estuary:    { name: "Downstream Estuary (Station D)", ph: 7.6, turb: 22, do: 6.6, temp: 24.0, waste: 19 }
+    };
+
+    let chartMode = 'trend';
+    let telemetryChart = null;
+
+    // Initial Sample Log Data
+    let logs = [
+      { time: "10:15 AM", zone: "Upstream Zone (Station A)", ph: 7.4, turb: 9, do: 8.1, temp: 21.5, wqi: 88 },
+      { time: "11:00 AM", zone: "City Midstream Basin (Station C)", ph: 6.7, turb: 38, do: 5.4, temp: 25.5, wqi: 61 },
+      { time: "11:45 AM", zone: "Industrial Discharge (Station B)", ph: 5.4, turb: 88, do: 3.2, temp: 31.0, wqi: 31 },
+      { time: "12:30 PM", zone: "Downstream Estuary (Station D)", ph: 7.6, turb: 22, do: 6.6, temp: 24.0, wqi: 74 }
+    ];
+
+    // Compute Water Quality Index (0 - 100)
+    function calculateWQI(ph, turb, doVal, temp) {
+      // pH penalty (optimal 7.2)
+      const phPenalty = Math.min(30, Math.abs(ph - 7.2) * 10);
+      // Turbidity penalty (optimal < 10 NTU)
+      const turbPenalty = Math.min(35, Math.max(0, (turb - 5) * 0.32));
+      // Dissolved Oxygen score (optimal >= 8 mg/L)
+      const doPenalty = Math.min(30, Math.max(0, (8.5 - doVal) * 4.5));
+      // Thermal penalty (optimal <= 25 C)
+      const tempPenalty = Math.min(10, Math.max(0, (temp - 25) * 0.8));
+
+      const raw = Math.round(100 - (phPenalty + turbPenalty + doPenalty + tempPenalty));
+      return Math.max(5, Math.min(100, raw));
+    }
+
+    function getStatusMeta(wqi) {
+      if (wqi >= 75) {
+        return {
+          label: "Good Quality",
+          badgeClass: "bg-emerald-100 text-emerald-800",
+          note: "Safe for aquatic ecosystem",
+          action: "Normal automated telemetry"
+        };
+      } else if (wqi >= 50) {
+        return {
+          label: "Moderate Pollution",
+          badgeClass: "bg-amber-100 text-amber-800",
+          note: "Elevated turbidity / runoff detected",
+          action: "Deploy skimmer boat & monitor"
+        };
+      } else {
+        return {
+          label: "Critical Alert",
+          badgeClass: "bg-rose-100 text-rose-800",
+          note: "Severe contamination threshold",
+          action: "Trigger authority alert immediately"
+        };
+      }
+    }
+
+    // Switch Zone Dropdown
+    function switchZone() {
+      const key = document.getElementById('zoneSelect').value;
+      const z = zonePresets[key];
+
+      document.getElementById('simPh').value = z.ph;
+      document.getElementById('simTurb').value = z.turb;
+      document.getElementById('simDo').value = z.do;
+      document.getElementById('simTemp').value = z.temp;
+      document.getElementById('kpiWasteBadge').textContent = `Skimmed: ${z.waste} kg`;
+
+      recalcSim(true);
+    }
+
+    // Apply Preset Buttons
+    function applyPreset(ph, turb, doVal, temp) {
+      document.getElementById('simPh').value = ph;
+      document.getElementById('simTurb').value = turb;
+      document.getElementById('simDo').value = doVal;
+      document.getElementById('simTemp').value = temp;
+      recalcSim(true);
+    }
+
+    // Recalculate Simulator & Update Top KPIs
+    function recalcSim(updateTopKpi = true) {
+      const ph = parseFloat(document.getElementById('simPh').value);
+      const turb = parseInt(document.getElementById('simTurb').value);
+      const doVal = parseFloat(document.getElementById('simDo').value);
+      const temp = parseFloat(document.getElementById('simTemp').value);
+
+      document.getElementById('simPhDisplay').textContent = ph.toFixed(1);
+      document.getElementById('simTurbDisplay').textContent = `${turb} NTU`;
+      document.getElementById('simDoDisplay').textContent = `${doVal.toFixed(1)} mg/L`;
+      document.getElementById('simTempDisplay').textContent = `${temp.toFixed(1)} °C`;
+
+      const wqi = calculateWQI(ph, turb, doVal, temp);
+      const meta = getStatusMeta(wqi);
+
+      // Update Simulator Output Box
+      document.getElementById('simResultScore').textContent = `${wqi} / 100`;
+      const simBadge = document.getElementById('simResultStatus');
+      simBadge.textContent = meta.label;
+      simBadge.className = `inline-block px-2.5 py-0.5 text-xs font-semibold rounded-full ${meta.badgeClass}`;
+      document.getElementById('simActionHint').textContent = meta.action;
+
+      if (updateTopKpi) {
+        document.getElementById('kpiWqiVal').textContent = wqi;
+        const kpiBadge = document.getElementById('kpiWqiBadge');
+        kpiBadge.textContent = meta.label.split(' ')[0];
+        kpiBadge.className = `px-2 py-0.5 text-xs font-semibold rounded-full ${meta.badgeClass}`;
+        document.getElementById('kpiWqiNote').textContent = meta.note;
+
+        document.getElementById('kpiPhVal').textContent = ph.toFixed(1);
+        const phPct = Math.min(100, Math.max(5, (ph / 14) * 100));
+        document.getElementById('kpiPhBar').style.width = `${phPct}%`;
+
+        document.getElementById('kpiTurbVal').textContent = turb;
+        document.getElementById('kpiTurbNote').textContent = turb > 25 ? "Exceeds clear-water threshold" : "Low suspended sediment load";
+
+        document.getElementById('kpiDoVal').textContent = doVal.toFixed(1);
+        document.getElementById('kpiDoNote').textContent = doVal < 5 ? "Hypoxic risk for aquatic life" : "Healthy oxygenation level";
+      }
+    }
+
+    // Log Reading to Table
+    function logCurrentReading() {
+      const key = document.getElementById('zoneSelect').value;
+      const zoneName = zonePresets[key].name;
+      const ph = parseFloat(document.getElementById('simPh').value);
+      const turb = parseInt(document.getElementById('simTurb').value);
+      const doVal = parseFloat(document.getElementById('simDo').value);
+      const temp = parseFloat(document.getElementById('simTemp').value);
+      const wqi = calculateWQI(ph, turb, doVal, temp);
+
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      logs.unshift({
+        time: timeStr,
+        zone: zoneName,
+        ph: ph.toFixed(1),
+        turb: turb,
+        do: doVal.toFixed(1),
+        temp: temp.toFixed(1),
+        wqi: wqi
+      });
+
+      renderTable();
+    }
+
+    // Render Table Rows
+    function renderTable() {
+      const tbody = document.getElementById('logTableBody');
+      if (logs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-xs text-slate-400">No readings logged yet. Use the simulator above to record a sensor snapshot.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = log
